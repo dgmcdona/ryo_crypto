@@ -1,3 +1,5 @@
+pub mod crypt;
+
 pub mod convert {
     use core::fmt;
     use itertools::Itertools;
@@ -5,44 +7,28 @@ pub mod convert {
     use std::fmt::{Debug, Display};
     use std::u8;
 
-    static B64CHARS: &'static [char] =
-        &['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N',
-        'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b',
-        'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p',
-        'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2', '3',
-        '4', '5', '6', '7', '8', '9', '0', '+', '/'];
-
-    fn bytes_from_hex(input: &str) -> Result<Vec<u8>, Box<dyn Error>> {
-        if input.len() % 2 != 0 {
-            return Err(Box::new(FormatError::HexStrError("hex string must be of even length")));
-        }
-
-        match input
-            .chars()
-            .chunks(2)
-            .into_iter()
-            .map(|x| u8::from_str_radix(x.collect::<String>().as_str(), 16))
-            .collect() {
-                Ok(bytes) => return Ok(bytes),
-                Err(e) => return Err(Box::new(e)),
-            }
-    }
+    static B64CHARS: &'static [char] = &[
+        'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R',
+        'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j',
+        'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1',
+        '2', '3', '4', '5', '6', '7', '8', '9', '0', '+', '/',
+    ];
 
     pub fn hex_str_to_b64(input: &str) -> Result<String, Box<dyn Error>> {
-        let bytes = bytes_from_hex(input)?;
+        let bytes = input.to_vec_u8()?;
         Ok(bytes_to_b64(bytes))
     }
 
-    fn chars_to_b64(input: &[u8]) -> String {
+    fn chunk_to_b64(input: &[u8]) -> String {
         let mut chrs = String::new();
 
-        chrs.push(B64CHARS[(input[0] >> 2) as usize]); // first
+        chrs.push(B64CHARS[(input[0] >> 2) as usize]);
 
         if input.len() >= 2 {
-            let v = ((input[0] & 0x3) << 4)| ((input[1] & 0xf0) >> 4);
-            chrs.push(B64CHARS[v as usize]); // second
+            let v = ((input[0] & 0x3) << 4) | ((input[1] & 0xf0) >> 4);
+            chrs.push(B64CHARS[v as usize]);
         } else {
-            chrs.push(B64CHARS[((input[0] & 0x3) << 4) as usize]); // second
+            chrs.push(B64CHARS[((input[0] & 0x3) << 4) as usize]);
             chrs.push('=');
             chrs.push('=');
             return chrs;
@@ -50,9 +36,9 @@ pub mod convert {
 
         if input.len() >= 3 {
             let v = ((input[1] & 0xf) << 2) | (((input[2] & 0xc0) >> 6) & 0xf);
-            chrs.push(B64CHARS[v as usize]); // third
+            chrs.push(B64CHARS[v as usize]);
         } else {
-            chrs.push(B64CHARS[((input[1] & 0xf) << 2) as usize]); // third
+            chrs.push(B64CHARS[((input[1] & 0xf) << 2) as usize]);
             chrs.push('=');
             return chrs;
         }
@@ -66,10 +52,29 @@ pub mod convert {
         input
             .chunks(3)
             .into_iter()
-            .map(|i| chars_to_b64(i))
+            .map(|i| chunk_to_b64(i))
             .collect()
     }
 
+    // Implement this trait to specify a conversion between your type and Vec<u8>.
+    pub trait ToBytes {
+        fn to_vec_u8(&self) -> Result<Vec<u8>, Box<dyn Error>>;
+    }
+
+
+    impl ToBytes for &str {
+        fn to_vec_u8(&self) -> Result<Vec<u8>, Box<dyn Error>> {
+            match self
+                .chars()
+                .chunks(2)
+                .into_iter()
+                .map(|x| u8::from_str_radix(x.collect::<String>().as_str(), 16))
+                .collect() {
+                    Ok(v) => Ok(v),
+                    Err(e) => Err(Box::new(e)),
+                }
+        }
+    }
 
     #[derive(Debug)]
     pub enum FormatError<'a> {
@@ -87,11 +92,11 @@ pub mod convert {
             }
         }
     }
-
 }
 
 #[cfg(test)]
-mod decode_tests {
+mod convert_tests {
+
     use crate::convert::*;
 
     #[test]
@@ -121,4 +126,5 @@ mod decode_tests {
 
         assert_eq!(hex_str_to_b64(input).unwrap(), out);
     }
+
 }
